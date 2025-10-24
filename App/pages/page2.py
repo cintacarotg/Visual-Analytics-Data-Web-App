@@ -29,14 +29,14 @@ def preprocess_input(df, model_artifact):
     scaler = model_artifact.get("scaler")
     model_columns = model_artifact["model_columns_ordered"]
 
-    # Compute TotalIncome if present in numeric_cols
+    # Compute TotalIncome if present
     if "TotalIncome" in numeric_cols:
         df2["TotalIncome"] = df2["ApplicantIncome"] + df2["CoapplicantIncome"]
 
     # Numeric preprocessing
     for col in numeric_cols:
         if col not in df2.columns:
-            df2[col] = 0  # fill missing numeric columns with 0
+            df2[col] = 0
         df2[col] = pd.to_numeric(df2[col], errors="coerce")
     if scaler is not None:
         df2[numeric_cols] = scaler.transform(df2[numeric_cols])
@@ -89,8 +89,10 @@ with st.form("applicant_form"):
         Loan_Amount_Term = st.selectbox("Loan Term (months)", [360, 120, 180, 240, 300, 60])
         Credit_History = st.selectbox("Credit History (1 = good, 0 = poor)", [1.0, 0.0])
         Property_Area = st.selectbox("Property Area", ["Urban", "Rural", "Semiurban"])
+    cutoff = st.slider("Decision cutoff (threshold for approval)", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
     submitted = st.form_submit_button("🔍 Predict Loan Approval")
 
+# --- PREDICTION ---
 if submitted:
     input_df = pd.DataFrame([{
         "Gender": Gender,
@@ -108,10 +110,14 @@ if submitted:
     try:
         X_proc = preprocess_input(input_df, model_artifact)
         prob = model.predict_proba(X_proc)[0, 1]
-        label = "✅ Approved" if prob >= 0.5 else "❌ Rejected"
-        color = "green" if prob >= 0.5 else "red"
+
+        label = "✅ Approved" if prob >= cutoff else "❌ Rejected"
+        color = "green" if prob >= cutoff else "red"
+
         st.markdown(f"<h3 style='text-align:center; color:{color};'>{label}</h3>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:center; font-size:22px;'>Approval Probability: <b>{prob:.2%}</b></p>", unsafe_allow_html=True)
+        st.info(f"Decision cutoff threshold: {cutoff:.2f}")
+
     except Exception as e:
         st.exception(e)
         st.error("Prediction failed — check model and input values.")
